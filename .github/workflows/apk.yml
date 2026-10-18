@@ -1,1 +1,59 @@
+name: Build APK
 
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Locate project
+        id: proj
+        run: |
+          if [ -f neon_vault.zip ]; then
+            unzip -q neon_vault.zip -d _src
+            echo "dir=_src/neon_vault" >> "$GITHUB_OUTPUT"
+          elif [ -d neon_vault ]; then
+            echo "dir=neon_vault" >> "$GITHUB_OUTPUT"
+          elif [ -f pubspec.yaml ]; then
+            echo "dir=." >> "$GITHUB_OUTPUT"
+          else
+            echo "No neon_vault.zip, neon_vault/ folder or pubspec.yaml found" >&2
+            exit 1
+          fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Build release APK
+        working-directory: ${{ steps.proj.outputs.dir }}
+        run: bash build_apk.sh
+
+      - name: Name the APK
+        run: cp "${{ steps.proj.outputs.dir }}/app/build/app/outputs/flutter-apk/app-release.apk" neon-vault.apk
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Neon Vault build ${{ github.run_number }}
+          files: neon-vault.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: neon-vault-apk
+          path: neon-vault.apk
